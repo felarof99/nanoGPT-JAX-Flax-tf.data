@@ -1,5 +1,7 @@
 
 # nanoGPT-JAX-JAX-JAX (*under development, not ready!*)
+- uses `tf.data.Dataset`, Flax, optax
+
 
 ![nanoGPT](assets/nanogpt.jpg)
 
