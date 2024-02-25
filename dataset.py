@@ -4,6 +4,7 @@ from typing import Dict, List, Mapping, Tuple
 import jax
 import jax.numpy as jnp
 import tensorflow as tf
+import requests
 
 # Below would result in a minibatch size of 32.
 BATCH_SIZE = 8 # how many independent sequences will we process in parallel?
@@ -19,6 +20,11 @@ class Dataset:
     block_size: int = BLOCK_SIZE
 
     def __post_init__(self):
+        url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
+        response = requests.get(url)
+        with open('input.txt', 'w', encoding='utf-8') as f:
+            f.write(response.text)
+        
         with open('input.txt', 'r', encoding='utf-8') as f:
             text = f.read()
 
