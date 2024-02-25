@@ -69,7 +69,7 @@ class Main:
             # random_key, random_subkey = jax.random.split(random_key)
             # dropout_key = jax.random.fold_in(key=random_key, data=state.step)
 
-            state, loss = self.train_step(state, batch)
+            self.state, loss = self.train_step(self.state, batch)
             print("loss", loss, "epoch", epoch) if epoch%100==0 else None
             
             
