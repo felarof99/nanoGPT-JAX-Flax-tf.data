@@ -3,10 +3,8 @@ from typing import List, Dict, Mapping, Tuple
 import jax
 import jax.numpy as jnp
 import jax.random as jrand
-import flax.linen as nn
 from flax.training import train_state  # Useful dataclass to keep train state
 import optax
-import tensorflow as tf
 import pdb
 import functools
 
@@ -27,10 +25,10 @@ class Config:
 
 class Main:
     def __init__(self):
-        config = Config(BATCH_SIZE=8, BLOCK_SIZE=16, T=16)
-        self.BATCH_SIZE = config.BATCH_SIZE
-        self.BLOCK_SIZE = config.BLOCK_SIZE
-        self.T = config.T 
+        self.config = Config(BATCH_SIZE=8, BLOCK_SIZE=16, T=16)
+        self.BATCH_SIZE = self.config.BATCH_SIZE
+        self.BLOCK_SIZE = self.config.BLOCK_SIZE
+        self.T = self.config.T 
         
         self.random_key = jax.random.PRNGKey(99)
         self.random_key, self.dropout_key = jax.random.split(self.random_key)
