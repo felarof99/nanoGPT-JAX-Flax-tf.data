@@ -71,3 +71,8 @@ class Main:
 
             state, loss = self.train_step(state, batch)
             print("loss", loss, "epoch", epoch) if epoch%100==0 else None
+            
+            
+if __name__ == "__main__":
+    main = Main()
+    main.train_and_evaluate()
