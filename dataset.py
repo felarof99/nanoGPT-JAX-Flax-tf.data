@@ -45,6 +45,9 @@ class Dataset:
         self.train_data = data[:n]
         self.val_data = data[n:]
 
+        self.train_dataset = self._create_dataset(self.train_data)
+        self.val_dataset = self._create_dataset(self.val_data)
+
     def _create_dataset(self, data):
         dataset = (tf.data.Dataset.from_tensor_slices(data)
                    .batch(self.block_size + 1)
@@ -65,8 +68,8 @@ class Dataset:
 
     def get_batch(self, training: bool = True):
         if not training:
-            val_batch = next(self.create_val_dataset())
+            val_batch = next(self.val_dataset)
             return jnp.array(val_batch)
 
-        train_batch = next(self.create_train_dataset())
+        train_batch = next(self.train_dataset)
         return jnp.array(train_batch)
