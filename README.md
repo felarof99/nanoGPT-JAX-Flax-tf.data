@@ -1,14 +1,18 @@
 
-# nanoGPT-JAX-JAX-JAX (*under development, not ready!*)
-- uses `tf.data.Dataset`, Flax, optax
+# nanoGPT-JAX-Flax-tfdata
+nanGPT implemented in JAX!
 
+nanoGPT is a minimalistic implementation of a GPT-like decoder-only transformer model, inspired by [Andrej Karpathy's](https://github.com/karpathy) implementation. This version is built using the [JAX](https://github.com/google/jax) library and the [Flax](https://github.com/google/flax) neural network library.
+
+## Key Features
+
+- **Simplified Attention Mechanism**: The core transformer attention logic is implemented for a single block of tokens, i.e., a single row from a batch. This approach simplifies the math and the code, eliminating the need to handle the batch dimension with complex manipulations.
+- **Dataset Pipeline with TensorFlow**: The dataset pipeline is implemented using `tf.data`, providing efficient data loading and preprocessing.
+- **Composable Transformations**: Leveraging JAX's composable transformations and the power of `jax.vmap`, the implementation achieves both simplicity and efficiency.
 
 ![nanoGPT](assets/nanogpt.jpg)
 
-The simplest, fastest implementation of nanoGPT in JAX. It is a rewrite of [minGPT](https://github.com/karpathy/nanoGPT) that prioritizes using JAX and all its fancy functions like `vmap`. Still under active development!
 
-![repro124m](assets/gpt2_124M_loss.png)
-
-## acknowledgements
+## Acknowledgements
 
 Thank you to Karpathy for impleemnting the first version of nanoGPT!
