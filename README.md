@@ -2,7 +2,7 @@
 # nanoGPT-JAX-Flax-tf.data
 nanGPT implemented in JAX!
 
-nanoGPT is a minimalistic implementation of a GPT-like decoder-only transformer model, inspired by [Andrej Karpathy's](https://github.com/karpathy) implementation. This version is built using the [JAX](https://github.com/google/jax) library and the [Flax](https://github.com/google/flax) neural network library.
+nanoGPT is a minimalistic implementation of a GPT-like decoder-only transformer model, inspired by [Andrej Karpathy's](https://github.com/karpathy/nanoGPT) implementation. This version is built using the [JAX](https://github.com/google/jax) library and the [Flax](https://github.com/google/flax) neural network library.
 
 ## Key Features
 
