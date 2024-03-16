@@ -24,6 +24,7 @@ class Config:
 
 
 class Main:
+    """Trainer main."""
     def __init__(self):
         self.config = Config(BATCH_SIZE=8, BLOCK_SIZE=16, T=16)
         self.BATCH_SIZE = self.config.BATCH_SIZE
