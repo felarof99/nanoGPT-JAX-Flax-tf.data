@@ -17,7 +17,7 @@ class SingleHeadAttention(nn.Module):
 
   @nn.compact 
   def __call__(self, tokens: jnp.array, training: bool):
-    """Tokens, each with some channel dim. Ex: [ [0.1, 0.2], [0.3, 0.4] ]"""
+    """Tokens, each with some channel dim. Ex: [[0.1, 0.2], [0.3, 0.4]]"""
     # tokens shape: (T, channels)
     # attention output shape: (T, head_size)
     # Use separate single dense layers for calculating keys, query, values
@@ -66,6 +66,26 @@ class MultiHeadAttention(nn.Module):
 
     projection =  self.projection(out_from_all_heads)
     return self.dropout(projection, deterministic=not training)
+
+class MultiHeadAttentionBatch(nn.Module):
+  num_heads: int
+  head_size: int # head_size * num_heads is the final embedding dimension you get, after concatenating from all heads
+  T: int
+  dropout_rate: float = 0.2
+
+  def setup(self):
+    self.multi_head_attn_single_example = MultiHeadAttention(
+      num_heads=self.num_heads,
+      head_size=self.head_size, 
+      T=self.T, 
+      dropout_rate=self.dropout_rate)
+
+    self.multi_head_attn_batch = jax.vmap(self.multi_head_attn_single_example, 
+                        in_axes=(0, None),  # tokens, training
+                        out_axes=(0))
+
+  def __call__(self, tokens: jnp.array, training: bool):
+    return self.multi_head_attn_batch(tokens, training)
 
 class FeedForward(nn.Module):
   output_size: int
