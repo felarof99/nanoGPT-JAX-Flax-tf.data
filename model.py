@@ -25,14 +25,11 @@ class SingleHeadAttention(nn.Module):
     queries = nn.Dense(self.head_size, use_bias=False)(tokens)
     values = nn.Dense(self.head_size, use_bias=False)(tokens)
 
-    # chanel info size
-    C = int(tokens.shape[-1])
-
     # Use causal attention mask (only attend to tokens in the past).
     mask = jnp.tril(jnp.ones(shape=(self.T, self.T))) # jnp.ones(shape=(self.T, self.T))
 
     # compute attention score.
-    wei = jnp.dot(queries, keys.T) * C**0.5 # (T, head_size) * (head_size, T) == (T, T)
+    wei = jnp.dot(queries, keys.T) / jnp.sqrt(self.head_size)
     wei = jnp.where(mask==0, -jnp.inf, wei)
     wei = nn.softmax(wei, axis=-1)
 
