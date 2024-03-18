@@ -12,27 +12,24 @@ import functools
 
 class SingleHeadAttention(nn.Module):
   head_size: int
-  T: int
+  T: int  # num_tokens
+  dropout_rate: float = 0.2
 
-  def setup(self):
-    self.key_layer = nn.Dense(self.head_size, use_bias=False)
-    self.query_layer = nn.Dense(self.head_size, use_bias=False)
-    self.value_layer = nn.Dense(self.head_size, use_bias=False)
-    self.dropout = nn.Dropout(rate=0.2)
-
-  
+  @nn.compact 
   def __call__(self, tokens: jnp.array, training: bool):
     """Tokens, each with some channel dim. Ex: [ [0.1, 0.2], [0.3, 0.4] ]"""
-    mask = jnp.tril(jnp.ones(shape=(self.T, self.T))) # jnp.ones(shape=(self.T, self.T))
-
-    # input: (T, channels)
-    # output: (T, head_size)
-    keys = self.key_layer(tokens)
-    queries = self.query_layer(tokens)
-    values = self.value_layer(tokens)
+    # tokens shape: (T, channels)
+    # attention output shape: (T, head_size)
+    # Use separate single dense layers for calculating keys, query, values
+    keys = nn.Dense(self.head_size, use_bias=False)(tokens)
+    queries = nn.Dense(self.head_size, use_bias=False)(tokens)
+    values = nn.Dense(self.head_size, use_bias=False)(tokens)
 
     # chanel info size
     C = int(tokens.shape[-1])
+
+    # Use causal attention mask (only attend to tokens in the past).
+    mask = jnp.tril(jnp.ones(shape=(self.T, self.T))) # jnp.ones(shape=(self.T, self.T))
 
     # compute attention score.
     wei = jnp.dot(queries, keys.T) * C**0.5 # (T, head_size) * (head_size, T) == (T, T)
@@ -40,7 +37,7 @@ class SingleHeadAttention(nn.Module):
     wei = nn.softmax(wei, axis=-1)
 
     attention_values = jnp.dot(wei, values) # (T, T) * (T, head_size))
-    attention_values = self.dropout(attention_values, deterministic=not training)
+    attention_values = nn.Dropout(rate=self.dropout_rate)(attention_values, deterministic=not training)
     return attention_values # (T, head_size)
 
 
@@ -48,28 +45,26 @@ class MultiHeadAttention(nn.Module):
   num_heads: int
   head_size: int # head_size * num_heads is the final embedding dimension you get, after concatenating from all heads
   T: int
+  dropout_rate: float = 0.2
 
   def setup(self):
     self.heads = [
         SingleHeadAttention(head_size=self.head_size, T=self.T) for _ in range(self.num_heads)
     ]
-    final_output_size = self.num_heads * self.head_size
-    self.projection = nn.Dense(features=final_output_size)
-
-    self.dropout = nn.Dropout(rate=0.2)
+    self.projection = nn.Dense(features=self.num_heads * self.head_size)
+    self.dropout = nn.Dropout(rate=self.dropout_rate)
 
   def __call__(self, tokens: jnp.array, training: bool):
     output_from_each_head = []
     for h in self.heads:
-      output = h(tokens, training)
-      output_from_each_head.append(output)
+      head_output = h(tokens, training)
+      output_from_each_head.append(head_output)
 
     # Run multiple attention heads in parallel and concatenate
     # their output along channel dimension, i.e., dim==-1
     out_from_all_heads = jnp.concatenate(output_from_each_head, axis=-1)
 
     projection =  self.projection(out_from_all_heads)
-
     return self.dropout(projection, deterministic=not training)
 
 class FeedForward(nn.Module):
