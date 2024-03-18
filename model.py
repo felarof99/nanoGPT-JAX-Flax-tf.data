@@ -83,9 +83,9 @@ class FeedForward(nn.Module):
 
 class TransformerEncoderBlock(nn.Module):
   num_heads: int
-  # output_size == head_size * num_heads, is the final embedding dimension you get after concatenating from all heads.
+  # output_size = head_size * num_heads, is the final embedding dimension you get after concatenating from all heads.
   output_size: int
-  T: int
+  T: int # num_tokens
 
   def setup(self):
     # communication.
