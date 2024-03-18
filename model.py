@@ -147,8 +147,7 @@ class LanguageModel(nn.Module):
     token_embs = self.token_embedding_table(block_of_tokens)
 
     # generate position embs for each token.
-    # num_pos = block_of_tokens.shape[0]
-    num_pos = T
+    num_pos = block_of_tokens.shape[0]
     positions = jnp.arange(0, num_pos)
     pos_embs = self.pos_embedding_table(positions)
 
