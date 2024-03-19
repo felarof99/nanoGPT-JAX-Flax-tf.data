@@ -59,11 +59,18 @@ data = Dataset(batch_size=config.BATCH_SIZE, block_size=config.BLOCK_SIZE)
 # Function to run a training step
 # This is an **IMPURE function** for convenience. Don't JIT it.
 def run_train_step():
-  global state 
-  for epoch in range(2):
-    batch = data.get_batch()
-    state, loss = train_step(state, batch)
-    print("loss", loss, "epoch", epoch) if epoch % 1 == 0 else None
+  global state
+
+  num_epochs = 20
+  steps_per_epoch = len(data.train_data) // config.BATCH_SIZE 
+  for epoch in range(num_epochs):
+    print("epoch: ", epoch)
+    train_dataset, _ = create_dataset()
+
+    for step in range(steps_per_epoch):
+      batch = data.get_batch()
+      state, loss = train_step(state, batch)
+      print("loss", loss, "epoch", epoch) if epoch % 1 == 0 else None
 
         
 if __name__ == "__main__":

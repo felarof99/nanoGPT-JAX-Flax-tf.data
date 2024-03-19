@@ -65,12 +65,12 @@ class Dataset:
         return dataset
 
     def create_train_dataset(self):
-        train_dataset = self._create_dataset(self.train_data)
-        return train_dataset
+        self.train_dataset = self._create_dataset(self.train_data)
+        return self.train_dataset
 
     def create_val_dataset(self):
-        val_dataset = self._create_dataset(self.val_data)
-        return val_dataset
+        self.val_dataset = self._create_dataset(self.val_data)
+        return self.val_dataset
 
     def get_batch(self, training: bool = True):
         if not training:
