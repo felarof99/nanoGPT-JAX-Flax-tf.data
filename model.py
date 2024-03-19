@@ -133,6 +133,8 @@ class LanguageModel(nn.Module):
   vocab_size: int # number of vocabulary (number of rows of embedding table)
   n_embed: int # embedding dim after lookup
   T: int # block size, i.e., number of tokens attention block is looking at once
+  num_heads: int
+  num_layers: int
 
   def setup(self):
     # number of channels you want to use for store info for each token.
@@ -144,11 +146,10 @@ class LanguageModel(nn.Module):
 
     # Since, there are 4 heads, each head only needs to output token_info of size 8.
     # Concantenate token_info from all 4 heards, gives us 32
-    self.num_blocks = 4
     self.blocks = [
-        TransformerEncoderBlock(num_heads=4,
+        TransformerEncoderBlock(num_heads=self.num_heads,
                                 output_size=self.n_embed,
-                                T=self.T) for _ in range(self.num_blocks)
+                                T=self.T) for _ in range(self.num_layers)
     ]
     self.ln = nn.LayerNorm()
     self.lang_model_head = nn.Dense(features=self.C)
@@ -168,7 +169,7 @@ class LanguageModel(nn.Module):
 
     # feed x into self-attention head.
     ## language model, forward pass, block_of_tokens
-    for i in range(self.num_blocks):
+    for i in range(self.num_layers):
       x = self.blocks[i](x, training)
 
     x = self.ln(x)

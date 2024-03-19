@@ -7,31 +7,42 @@ import jax.numpy as jnp
 import optax
 from flax.training import train_state
 from dataclasses import dataclass
+import importlib
 
-from dataset import Dataset
-from model import LanguageModel
+import dataset
+import model
+
+importlib.reload(dataset)
+importlib.reload(model)
 
 class TrainState(train_state.TrainState):
     key: jax.random.KeyArray
 
 @dataclass
 class Config:
-    BATCH_SIZE: int = 8
-    BLOCK_SIZE: int = 16
-    T: int = 16
+    BATCH_SIZE: int = 512
+    BLOCK_SIZE: int = 64
+    T: int = 64
+    n_embed: int = 256
+    num_heads: int = 8
+    num_layers: int = 6
 
 config = Config()
 
 random_key = jax.random.PRNGKey(99)
 
 # Initialize model
-model = LanguageModel(vocab_size=65, n_embed=32, T=config.BLOCK_SIZE)
+lm_model = model.LanguageModel(vocab_size=65, 
+                      n_embed=config.n_embed, 
+                      T=config.BLOCK_SIZE,
+                      num_heads=config.num_heads,
+                      num_layers=config.num_layers)
 sample_block_of_tokens = jnp.ones(shape=(config.T,), dtype=jnp.int32)
-output, params = model.init_with_output(jax.random.PRNGKey(99), sample_block_of_tokens, training=False)
+output, params = lm_model.init_with_output(jax.random.PRNGKey(99), sample_block_of_tokens, training=False)
 params = params["params"]
 
 def model_apply(params, inputs, training, dropout_key):
-    return model.apply({"params": params}, inputs, training, rngs={'dropout': dropout_key})
+    return lm_model.apply({"params": params}, inputs, training, rngs={'dropout': dropout_key})
 
 # Vectorize model apply function
 model_apply_batch = jax.vmap(model_apply, in_axes=(None, 0, None, None), out_axes=(0))
@@ -59,6 +70,9 @@ def train_step(state, inputs, targets, dropout_key):
     grad_fn = jax.value_and_grad(forward_pass, argnums=(0))
     loss, grads = grad_fn(state.params, state, batch, dropout_key)
 
+    print("ntn99 dropout key", dropout_key)
+    print("ntn99 loss", loss)
+
     loss = jax.lax.pmean(loss, axis_name="devices")
     grads = jax.lax.pmean(grads, axis_name="devices")
 
@@ -68,7 +82,7 @@ def train_step(state, inputs, targets, dropout_key):
 # Initialize optimizer and training state
 opt = optax.adam(learning_rate=0.0001)
 state = TrainState.create(apply_fn=model_apply_batch, params=params, tx=opt, key=random_key)
-data = Dataset(batch_size=config.BATCH_SIZE, block_size=config.BLOCK_SIZE)
+data = dataset.Dataset(batch_size=config.BATCH_SIZE, block_size=config.BLOCK_SIZE)
 
 # pmap the train_step.
 train_step_pmap = jax.jit(jax.pmap(train_step, in_axes=(0, 0, 0, None), out_axes=(0), axis_name="devices"))
@@ -76,7 +90,7 @@ states = jax.device_put_replicated(state, jax.local_devices())
 
 # Function to run a training step
 # This is an **IMPURE function** for convenience. Don't JIT it.
-def run_train_step(fake_jit = True, fake_pmap = False):
+def run_train_step(fake_jit = False, fake_pmap = False):
   global state, states, random_key
 
   fake_pmap = chex.fake_pmap_and_jit(enable_jit_patching=fake_jit, enable_pmap_patching=fake)
