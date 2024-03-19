@@ -57,15 +57,14 @@ state = TrainState.create(apply_fn=model_apply_batch, params=params, tx=opt, key
 data = Dataset(batch_size=config.BATCH_SIZE, block_size=config.BLOCK_SIZE)
 
 # Function to run a training step
+# This is an **IMPURE function** for convenience. Don't JIT it.
 def run_train_step():
+  global state 
+  for epoch in range(1):
     batch = data.get_batch()
     state, loss = train_step(state, batch)
-    print(f"Loss: {loss}")
+    print("loss", loss, "epoch", epoch) if epoch % 100 == 0 else None
 
-def run_train_and_evaluate():
-    for epoch in range(1):
-        loss = run_train_step()
-        print("loss", loss, "epoch", epoch) if epoch % 100 == 0 else None
         
 if __name__ == "__main__":
     run_train_step()
