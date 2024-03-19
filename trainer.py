@@ -12,9 +12,6 @@ import importlib
 import dataset
 import model
 
-importlib.reload(dataset)
-importlib.reload(model)
-
 class TrainState(train_state.TrainState):
     key: jax.random.KeyArray
 
@@ -90,14 +87,18 @@ states = jax.device_put_replicated(state, jax.local_devices())
 
 # Function to run a training step
 # This is an **IMPURE function** for convenience. Don't JIT it.
-def run_train_step(fake_jit = False, fake_pmap = False):
+def run_train_step(fake_jit = False, fake_pmap = False, reload_libs = False):
+  if reload_libs:
+    importlib.reload(dataset)
+    importlib.reload(model)
+
   global state, states, random_key
 
-  fake_pmap = chex.fake_pmap_and_jit(enable_jit_patching=fake_jit, enable_pmap_patching=fake)
+  fake_pmap = chex.fake_pmap_and_jit(enable_jit_patching=fake_jit, enable_pmap_patching=fake_pmap)
   fake_pmap.start()
 
-  num_epochs = 1 # 5
-  steps_per_epoch = 1 # len(data.train_data) // config.BATCH_SIZE 
+  num_epochs = 5
+  steps_per_epoch = len(data.train_data) // config.BATCH_SIZE 
   for epoch in range(num_epochs):
     print("epoch: ", epoch)
     data.create_train_dataset()
