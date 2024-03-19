@@ -21,9 +21,7 @@ class Config:
 
 config = Config()
 
-
 random_key = jax.random.PRNGKey(99)
-random_key, dropout_key = jax.random.split(random_key)
 
 # Initialize model
 model = LanguageModel(vocab_size=65, n_embed=32, T=config.BLOCK_SIZE)
@@ -31,18 +29,18 @@ sample_block_of_tokens = jnp.ones(shape=(config.T,), dtype=jnp.int32)
 output, params = model.init_with_output(jax.random.PRNGKey(99), sample_block_of_tokens, training=False)
 params = params["params"]
 
-def model_apply(params, inputs, training):
+def model_apply(params, inputs, training, dropout_key):
     return model.apply({"params": params}, inputs, training, rngs={'dropout': dropout_key})
 
 # Vectorize model apply function
-model_apply_batch = jax.vmap(model_apply, in_axes=(None, 0, None), out_axes=(0))
+model_apply_batch = jax.vmap(model_apply, in_axes=(None, 0, None, None), out_axes=(0))
 
 PER_HOST_BATCH_SIZE = config.BATCH_SIZE // jax.device_count()
 
 # Define forward pass
-def forward_pass(params, state, batch):
+def forward_pass(params, state, batch, dropout_key):
     inputs, targets = batch
-    logits = state.apply_fn(params, inputs, True)
+    logits = state.apply_fn(params, inputs, True, dropout_key)
 
     chex.assert_shape(inputs, (PER_HOST_BATCH_SIZE, config.BLOCK_SIZE))
     chex.assert_shape(targets, (PER_HOST_BATCH_SIZE, config.BLOCK_SIZE))
@@ -52,11 +50,11 @@ def forward_pass(params, state, batch):
     return loss
 
 # Define training step
-def train_step(state, inputs, targets):
+def train_step(state, inputs, targets, dropout_key):
     batch = inputs, targets
 
     grad_fn = jax.value_and_grad(forward_pass, argnums=(0))
-    loss, grads = grad_fn(state.params, state, batch)
+    loss, grads = grad_fn(state.params, state, batch, dropout_key)
 
     loss = jax.lax.pmean(loss, axis_name="devices")
     grads = jax.lax.pmean(grads, axis_name="devices")
@@ -78,8 +76,8 @@ states = jax.device_put_replicated(state, jax.local_devices())
 def run_train_step():
   global state, states
 
-  num_epochs = 20
-  steps_per_epoch = len(data.train_data) // config.BATCH_SIZE 
+  num_epochs = 1
+  steps_per_epoch = 2 # len(data.train_data) // config.BATCH_SIZE 
   for epoch in range(num_epochs):
     print("epoch: ", epoch)
     data.create_train_dataset()
