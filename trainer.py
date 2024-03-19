@@ -70,7 +70,7 @@ state = TrainState.create(apply_fn=model_apply_batch, params=params, tx=opt, key
 data = Dataset(batch_size=config.BATCH_SIZE, block_size=config.BLOCK_SIZE)
 
 # pmap the train_step.
-train_step_pmap = jax.pmap(train_step, in_axes=(0, 0, 0, None), out_axes=(0), axis_name="devices")
+train_step_pmap = jax.jit(jax.pmap(train_step, in_axes=(0, 0, 0, None), out_axes=(0), axis_name="devices"))
 states = jax.device_put_replicated(state, jax.local_devices())
 
 # Function to run a training step
@@ -78,8 +78,8 @@ states = jax.device_put_replicated(state, jax.local_devices())
 def run_train_step():
   global state, states, random_key
 
-  num_epochs = 1
-  steps_per_epoch = 2 # len(data.train_data) // config.BATCH_SIZE 
+  num_epochs = 5
+  steps_per_epoch = len(data.train_data) // config.BATCH_SIZE 
   for epoch in range(num_epochs):
     print("epoch: ", epoch)
     data.create_train_dataset()
@@ -94,7 +94,7 @@ def run_train_step():
       targets = targets.reshape((jax.device_count(), -1, targets.shape[-1]))
 
       states, loss = train_step_pmap(states, inputs, targets, random_subkey)
-      print("loss", loss[0], "epoch", epoch) if epoch % 1 == 0 else None
+      print("loss", loss[0], "epoch", epoch) if epoch % 1000 == 0 else None
 
         
 # if __name__ == "__main__":
