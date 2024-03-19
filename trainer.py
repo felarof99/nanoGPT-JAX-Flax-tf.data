@@ -1,6 +1,7 @@
 from typing import Tuple
 
 import chex
+from chex._src import fake
 import jax
 import jax.numpy as jnp
 import optax
@@ -75,11 +76,14 @@ states = jax.device_put_replicated(state, jax.local_devices())
 
 # Function to run a training step
 # This is an **IMPURE function** for convenience. Don't JIT it.
-def run_train_step():
+def run_train_step(fake_jit = True, fake_pmap = False):
   global state, states, random_key
 
-  num_epochs = 5
-  steps_per_epoch = len(data.train_data) // config.BATCH_SIZE 
+  fake_pmap = chex.fake_pmap_and_jit(enable_jit_patching=fake_jit, enable_pmap_patching=fake)
+  fake_pmap.start()
+
+  num_epochs = 1 # 5
+  steps_per_epoch = 1 # len(data.train_data) // config.BATCH_SIZE 
   for epoch in range(num_epochs):
     print("epoch: ", epoch)
     data.create_train_dataset()
@@ -95,6 +99,8 @@ def run_train_step():
 
       states, loss = train_step_pmap(states, inputs, targets, random_subkey)
       print("loss", loss[0], "epoch", epoch) if epoch % 1000 == 0 else None
+
+  fake_pmap.stop()
 
         
 # if __name__ == "__main__":
