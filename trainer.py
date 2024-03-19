@@ -60,10 +60,10 @@ data = Dataset(batch_size=config.BATCH_SIZE, block_size=config.BLOCK_SIZE)
 # This is an **IMPURE function** for convenience. Don't JIT it.
 def run_train_step():
   global state 
-  for epoch in range(1):
+  for epoch in range(2):
     batch = data.get_batch()
     state, loss = train_step(state, batch)
-    print("loss", loss, "epoch", epoch) if epoch % 100 == 0 else None
+    print("loss", loss, "epoch", epoch) if epoch % 1 == 0 else None
 
         
 if __name__ == "__main__":
