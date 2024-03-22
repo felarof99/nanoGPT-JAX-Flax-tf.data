@@ -15,4 +15,4 @@ nanoGPT is a minimalistic implementation of a GPT-like decoder-only transformer 
 
 ## Acknowledgements
 
-Thank you to Karpathy for impleemnting the first version of nanoGPT!
+Thank you to Karpathy for implemnting the first version of nanoGPT!
