@@ -1,122 +1,111 @@
-from typing import Tuple
+from typing import List, Dict, Mapping, Tuple
 
-import chex
-from chex._src import fake
 import jax
 import jax.numpy as jnp
+import jax.random as jrand
+import flax
+import flax.linen as nn
+from flax.training import train_state  # Useful dataclass to keep train state
 import optax
-from flax.training import train_state
-from dataclasses import dataclass
-import importlib
+import tensorflow as tf
+import pdb
+import functools
 
-import dataset
+def println(*args):
+  for arg in args:
+    print(arg)
+
+import jax.tools.colab_tpu
+jax.tools.colab_tpu.setup_tpu()
+jax.devices()
+
+import dataset as data
 import model
 
 class TrainState(train_state.TrainState):
     key: jax.random.KeyArray
 
-@dataclass
+
+@dataclasses.dataclass
 class Config:
-    BATCH_SIZE: int = 512
-    BLOCK_SIZE: int = 64
-    T: int = 64
+    vocab_size: int = 66
+    batch_size: int = 512
+    block_size: int = 64
     n_embed: int = 256
     num_heads: int = 8
     num_layers: int = 6
 
 config = Config()
+DEVICE_COUNT = 8
 
-random_key = jax.random.PRNGKey(99)
+def forward_pass(params, state, batch, training, rng):
+  inputs, targets = batch
+  logits = state.apply_fn({"params": params}, inputs, training, rngs={"dropout": rng})
 
-# Initialize model
-lm_model = model.LanguageModel(vocab_size=65, 
-                      n_embed=config.n_embed, 
-                      T=config.BLOCK_SIZE,
+  # logits: T, C
+  # targets: T
+  # logits predict each position
+  loss = optax.softmax_cross_entropy_with_integer_labels(logits, targets)
+  loss = loss.mean()
+  return loss
+       
+def backward_pass(state, batch, training, rng):
+  grad_fn = jax.value_and_grad(forward_pass, argnums=(0))
+  loss, grads = grad_fn(state.params, state, batch, training, rng)
+
+  state = state.apply_gradients(grads=grads)
+  return state, loss
+ 
+def backward_pass_pmap(state, batch, training, rng):
+  grad_fn = jax.value_and_grad(forward_pass, argnums=(0))
+  loss, grads = grad_fn(state.params, state, batch, training, rng)
+
+  loss = jax.lax.pmean(loss, axis_name="devices")
+  grads = jax.lax.pmean(grads, axis_name="devices")
+
+  state = state.apply_gradients(grads=grads)
+  return state, loss
+
+def train_step(state, batch, training, rng):
+  state, loss = backward_pass(state, batch, training, rng)
+  return state, loss
+
+train_step_pmap = jax.pmap(
+    jax.jit(train_step), in_axes=(0, 0, None, 0), out_axes=(0), axis_name="devices")
+
+def get_batch_pmap(dataset):
+  inputs, targets = data.get_batch(dataset)
+  inputs = inputs.reshape((jax.device_count(), -1, inputs.shape[-1]))
+  targets = targets.reshape((jax.device_count(), -1, targets.shape[-1]))
+  return inputs, targets
+
+model = model.LanguageModelBatch(vocab_size=config.vocab_size,
+                      n_embed=config.n_embed,
+                      num_tokens=config.block_size,
                       num_heads=config.num_heads,
                       num_layers=config.num_layers)
-sample_block_of_tokens = jnp.ones(shape=(config.T,), dtype=jnp.int32)
-output, params = lm_model.init_with_output(jax.random.PRNGKey(99), sample_block_of_tokens, training=False)
+
+train_dataset = data.create_train_dataset()
+inputs, targets = data.get_batch(train_dataset)
+inputsp, targetsp = get_batch_pmap(train_dataset)
+
+output, params = model.init_with_output(jax.random.PRNGKey(99), inputs, training=False)
 params = params["params"]
 
-def model_apply(params, inputs, training, dropout_key):
-    return lm_model.apply({"params": params}, inputs, training, rngs={'dropout': dropout_key})
-
-# Vectorize model apply function
-model_apply_batch = jax.vmap(model_apply, in_axes=(None, 0, None, None), out_axes=(0))
-
-PER_HOST_BATCH_SIZE = config.BATCH_SIZE // jax.device_count()
-
-# Define forward pass
-def forward_pass(params, state, batch, dropout_key):
-    inputs, targets = batch
-    logits = state.apply_fn(params, inputs, True, dropout_key)
-
-    chex.assert_shape(inputs, (PER_HOST_BATCH_SIZE, config.BLOCK_SIZE))
-    chex.assert_shape(targets, (PER_HOST_BATCH_SIZE, config.BLOCK_SIZE))
-
-    loss = optax.softmax_cross_entropy_with_integer_labels(logits, targets)
-    loss = loss.mean()
-    return loss
-
-# Define training step
-def train_step(state, inputs, targets, dropout_key):
-    dropout_key = jax.random.fold_in(key=dropout_key, data=state.step)
-
-    batch = inputs, targets
-
-    grad_fn = jax.value_and_grad(forward_pass, argnums=(0))
-    loss, grads = grad_fn(state.params, state, batch, dropout_key)
-
-    print("ntn99 dropout key", dropout_key)
-    print("ntn99 loss", loss)
-
-    loss = jax.lax.pmean(loss, axis_name="devices")
-    grads = jax.lax.pmean(grads, axis_name="devices")
-
-    state = state.apply_gradients(grads=grads)
-    return state, loss
-
-# Initialize optimizer and training state
 opt = optax.adam(learning_rate=0.0001)
-state = TrainState.create(apply_fn=model_apply_batch, params=params, tx=opt, key=random_key)
-data = dataset.Dataset(batch_size=config.BATCH_SIZE, block_size=config.BLOCK_SIZE)
+state = train_state.TrainState.create(apply_fn=model.apply, params=params, tx=opt)
 
-# pmap the train_step.
-train_step_pmap = jax.jit(jax.pmap(train_step, in_axes=(0, 0, 0, None), out_axes=(0), axis_name="devices"))
 states = jax.device_put_replicated(state, jax.local_devices())
 
-# Function to run a training step
-# This is an **IMPURE function** for convenience. Don't JIT it.
-def run_train_step(fake_jit = False, fake_pmap = False, reload_libs = False):
-  if reload_libs:
-    importlib.reload(dataset)
-    importlib.reload(model)
+states, loss = train_step_pmap(states, get_batch_pmap(train_dataset), False, jax.random.split(jax.random.PRNGKey(9),
+                                                                                              num=DEVICE_COUNT))
+rngs = jax.random.split(jax.random.PRNGKey(9), num=DEVICE_COUNT)
+for step in range(5000):
+  rngs = jax.random.split(rngs[0], num=DEVICE_COUNT)
+  train_batch = get_batch_pmap(train_dataset)
+  states, loss = train_step_pmap(states, train_batch, False, rngs)
 
-  global state, states, random_key
+  print("loss", loss[0], "step", step) if step%100==0 else None
 
-  fake_pmap = chex.fake_pmap_and_jit(enable_jit_patching=fake_jit, enable_pmap_patching=fake_pmap)
-  fake_pmap.start()
-
-  num_epochs = 5
-  steps_per_epoch = len(data.train_data) // config.BATCH_SIZE 
-  for epoch in range(num_epochs):
-    print("epoch: ", epoch)
-    data.create_train_dataset()
-
-    for step in range(steps_per_epoch):
-      random_key, random_subkey = jax.random.split(random_key)
-
-      inputs, targets = data.get_batch()
-
-      # create device dimension for minibatch
-      inputs = inputs.reshape((jax.device_count(), -1, inputs.shape[-1]))
-      targets = targets.reshape((jax.device_count(), -1, targets.shape[-1]))
-
-      states, loss = train_step_pmap(states, inputs, targets, random_subkey)
-      print("loss", loss[0], "epoch", epoch) if epoch % 1000 == 0 else None
-
-  fake_pmap.stop()
-
-        
 # if __name__ == "__main__":
 #     run_train_step()
